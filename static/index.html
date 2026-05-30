@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Hermes 任务面板</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f0f1a;
+  color: #e0e0f0;
+}
+/* ===== Fixed header ===== */
+.header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid rgba(108,99,255,0.2);
+}
+.header h1 { font-size: 18px; font-weight: 700; color: #8b83ff; }
+.header .subtitle { font-size: 11px; color: #8888aa; margin-top: 2px; }
+
+/* ===== Fixed tab bar ===== */
+.tab-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 100;
+  background: #1a1a2e;
+  border-top: 1px solid rgba(108,99,255,0.2);
+  display: flex;
+  height: 50px;
+}
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #8888aa;
+  border-top: 2px solid transparent;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab-item.active { color: #8b83ff; border-top-color: #6c63ff; }
+.tab-item .tab-icon { font-size: 20px; line-height: 1; }
+.tab-item .tab-label { font-size: 10px; margin-top: 2px; }
+
+/* ===== Scrollable content ===== */
+.content-wrap {
+  position: fixed;
+  top: 54px; left: 0; right: 0;
+  bottom: 50px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px 12px;
+}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ===== Common ===== */
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.section-header .title { font-size: 13px; font-weight: 600; }
+.btn-sm {
+  background: none;
+  border: 1px solid rgba(108,99,255,0.3);
+  color: #8b83ff;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.btn-sm:active { background: rgba(108,99,255,0.15); }
+
+/* ===== Card ===== */
+.card {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(108,99,255,0.1);
+}
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  justify-content: space-between;
+}
+.card-header-left { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.card-header-right { display: flex; gap: 4px; flex-shrink: 0; flex-wrap: wrap; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.badge-ok { background: rgba(74,222,128,0.2); color: #4ade80; }
+.badge-error { background: rgba(248,113,113,0.2); color: #f87171; }
+.badge-pending { background: rgba(250,204,21,0.2); color: #facc15; }
+.badge-running { background: rgba(96,165,250,0.2); color: #60a5fa; }
+.badge-paused { background: rgba(148,163,184,0.2); color: #8888aa; }
+
+.info-row { display: flex; font-size: 12px; padding: 2px 0; }
+.info-label { color: #8888aa; min-width: 60px; flex-shrink: 0; }
+.info-value { color: #e0e0f0; word-break: break-all; }
+
+.prompt-box {
+  background: rgba(0,0,0,0.3);
+  border-radius: 6px;
+  padding: 8px;
+  margin: 6px 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #b0b0d0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 60px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.prompt-box.expanded { max-height: none; }
+.error-box { background: rgba(248,113,113,0.1); border-radius: 6px; padding: 6px 8px; margin-top: 6px; font-size: 11px; color: #f87171; word-break: break-all; }
+
+.expand-btn { font-size: 11px; color: #8b83ff; cursor: pointer; margin-top: 6px; display: inline-block; }
+.output-area { display: none; margin-top: 8px; }
+.output-area.open { display: block; }
+.output-content { background: rgba(0,0,0,0.4); border-radius: 8px; padding: 10px; font-family: 'SF Mono','Fira Code',monospace; font-size: 10px; white-space: pre-wrap; max-height: 200px; overflow-y: auto; color: #a0a0c0; line-height: 1.5; }
+.output-meta { font-size: 10px; color: #8888aa; margin-bottom: 4px; }
+
+/* ===== Todo ===== */
+.add-todo { display: flex; gap: 8px; margin-bottom: 10px; }
+.add-todo input { flex: 1; background: #16213e; border: 1px solid rgba(108,99,255,0.2); border-radius: 8px; padding: 10px 12px; color: #e0e0f0; font-size: 13px; outline: none; }
+.add-todo input:focus { border-color: #6c63ff; }
+.add-todo input::placeholder { color: #8888aa; opacity: 0.6; }
+.add-todo button { background: #6c63ff; color: #fff; border: none; border-radius: 8px; padding: 0 16px; font-weight: 600; font-size: 16px; cursor: pointer; }
+
+.filter-bar { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.filter-bar .badge { cursor: pointer; }
+.filter-bar .inactive { opacity: 0.6; }
+
+.todo-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid rgba(108,99,255,0.08); }
+.todo-item:last-child { border-bottom: none; }
+.todo-check { width: 22px; height: 22px; border: 2px solid #8888aa; border-radius: 50%; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 11px; margin-top: 1px; }
+.todo-check.done { background: #4ade80; border-color: #4ade80; }
+.todo-check.in-progress { border-color: #60a5fa; }
+.todo-body { flex: 1; min-width: 0; }
+.todo-text { font-size: 13px; line-height: 1.4; word-break: break-word; }
+.todo-text.done { text-decoration: line-through; color: #8888aa; }
+.todo-meta { font-size: 10px; color: #8888aa; margin-top: 3px; }
+.todo-del { color: #f87171; cursor: pointer; font-size: 15px; padding: 4px; flex-shrink: 0; opacity: 0.6; }
+
+/* ===== Modal ===== */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: #1a1a2e;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 20px;
+  border: 1px solid rgba(108,99,255,0.2);
+}
+.modal h2 { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+.modal label { font-size: 12px; color: #8888aa; display: block; margin-bottom: 4px; margin-top: 10px; }
+.modal input, .modal select, .modal textarea { width: 100%; background: #16213e; border: 1px solid rgba(108,99,255,0.2); border-radius: 8px; padding: 10px 12px; color: #e0e0f0; font-size: 13px; outline: none; }
+.modal input:focus, .modal select:focus, .modal textarea:focus { border-color: #6c63ff; }
+.modal textarea { min-height: 80px; resize: vertical; font-family: inherit; }
+.modal .btn-row { display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end; }
+.modal .btn-cancel { background: #16213e; color: #8888aa; border: 1px solid rgba(108,99,255,0.2); border-radius: 8px; padding: 10px 18px; font-size: 13px; cursor: pointer; }
+.btn-primary { background: #6c63ff; color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-weight: 600; font-size: 13px; cursor: pointer; }
+
+.empty-state { text-align: center; padding: 40px 20px; color: #8888aa; }
+.empty-state .icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+.empty-state p { font-size: 13px; line-height: 1.6; white-space: pre-line; }
+.loading { text-align: center; padding: 30px; color: #8888aa; font-size: 13px; }
+.toast {
+  position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%);
+  background: #16213e; color: #e0e0f0; padding: 8px 16px;
+  border-radius: 8px; font-size: 12px; z-index: 300;
+  border: 1px solid rgba(108,99,255,0.3); display: none; white-space: nowrap;
+}
+.toast.show { display: block; }
+</style>
+</head>
+<body>
+
+<!-- Fixed Header -->
+<div class="header">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <h1>⚡ Hermes 任务面板</h1>
+      <div class="subtitle" id="lastUpdate">加载中...</div>
+    </div>
+    <span style="font-size:10px;color:#8888aa;background:#16213e;padding:2px 8px;border-radius:99px">DeepSeek</span>
+  </div>
+</div>
+
+<!-- Scrollable Content -->
+<div class="content-wrap" id="contentWrap">
+
+  <!-- Cron Panel -->
+  <div class="tab-panel active" id="panelCron">
+    <div class="section-header">
+      <span class="title">🕐 <span id="cronCount">0</span> 个定时任务</span>
+      <div>
+        <button class="btn-sm" onclick="openCreateCron()">➕ 新建</button>
+        <button class="btn-sm" onclick="loadCronJobs()">⟳</button>
+      </div>
+    </div>
+    <div id="cronList"></div>
+    <div id="cronEmpty" class="empty-state" style="display:none">
+      <div class="icon">🕐</div>
+      <p>暂无定时任务<br>点击「➕ 新建」创建</p>
+    </div>
+  </div>
+
+  <!-- Todo Panel -->
+  <div class="tab-panel" id="panelTodo">
+    <div class="section-header">
+      <span class="title">📋 <span id="todoCount">0</span> 个任务</span>
+      <button class="btn-sm" onclick="loadTodos()">⟳</button>
+    </div>
+    <div class="add-todo">
+      <input id="todoInput" placeholder="添加新任务..." onkeydown="if(event.key==='Enter')addTodo()">
+      <button onclick="addTodo()">➕</button>
+    </div>
+    <div class="filter-bar">
+      <span class="badge badge-ok" data-filter="all" onclick="setFilter('all')">全部</span>
+      <span class="badge badge-pending inactive" data-filter="pending" onclick="setFilter('pending')">待办</span>
+      <span class="badge badge-running inactive" data-filter="in_progress" onclick="setFilter('in_progress')">进行中</span>
+      <span class="badge badge-ok inactive" data-filter="completed" onclick="setFilter('completed')">已完成</span>
+    </div>
+    <div id="todoList"></div>
+    <div id="todoEmpty" class="empty-state" style="display:none"><div class="icon">📋</div><p>暂无任务</p></div>
+  </div>
+
+</div>
+
+<!-- Fixed Tab Bar -->
+<div class="tab-bar">
+  <div class="tab-item active" data-tab="cron" onclick="switchTab('cron')">
+    <span class="tab-icon">🕐</span>
+    <span class="tab-label">定时任务</span>
+  </div>
+  <div class="tab-item" data-tab="todo" onclick="switchTab('todo')">
+    <span class="tab-icon">📋</span>
+    <span class="tab-label">任务清单</span>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Create Modal -->
+<div class="modal-overlay" id="modalCreate">
+  <div class="modal">
+    <h2>➕ 新建定时任务</h2>
+    <label>任务名称</label>
+    <input id="cronName" placeholder="如：每日新闻摘要">
+    <label>命令 <span style="color:#f87171">*</span></label>
+    <textarea id="cronPrompt" placeholder="给 Hermes 的完整指令..."></textarea>
+    <label>执行间隔</label>
+    <select id="cronSchedule">
+      <option value="30m">每 30 分钟</option>
+      <option value="1h">每 1 小时</option>
+      <option value="2h">每 2 小时</option>
+      <option value="3h">每 3 小时</option>
+      <option value="6h">每 6 小时</option>
+      <option value="12h">每 12 小时</option>
+      <option value="1d" selected>每天</option>
+    </select>
+    <label>投递到</label>
+    <select id="cronDeliver">
+      <option value="telegram">Telegram</option>
+      <option value="qqbot">QQ Bot</option>
+      <option value="local">本地保存</option>
+    </select>
+    <label>技能（可选，逗号分隔）</label>
+    <input id="cronSkills" placeholder="如: web_search, arxiv">
+    <div class="btn-row">
+      <button class="btn-cancel" onclick="document.getElementById('modalCreate').classList.remove('open')">取消</button>
+      <button class="btn-primary" onclick="createCronJob()">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="modalEdit">
+  <div class="modal">
+    <h2>✏️ 编辑定时任务</h2>
+    <input type="hidden" id="editCronId">
+    <label>任务名称</label>
+    <input id="editCronName">
+    <label>命令 <span style="color:#f87171">*</span></label>
+    <textarea id="editCronPrompt" style="min-height:100px"></textarea>
+    <label>执行间隔</label>
+    <select id="editCronSchedule">
+      <option value="30m">每 30 分钟</option>
+      <option value="1h">每 1 小时</option>
+      <option value="2h">每 2 小时</option>
+      <option value="3h">每 3 小时</option>
+      <option value="6h">每 6 小时</option>
+      <option value="12h">每 12 小时</option>
+      <option value="1d">每天</option>
+    </select>
+    <label>投递到</label>
+    <select id="editCronDeliver">
+      <option value="telegram">Telegram</option>
+      <option value="qqbot">QQ Bot</option>
+      <option value="local">本地保存</option>
+    </select>
+    <div class="btn-row">
+      <button class="btn-cancel" onclick="document.getElementById('modalEdit').classList.remove('open')">取消</button>
+      <button class="btn-primary" onclick="saveEditCron()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var cronJobs = [], todos = [], currentFilter = 'all';
+
+function switchTab(name) {
+  var tabs = document.querySelectorAll('.tab-item');
+  var panels = document.querySelectorAll('.tab-panel');
+  for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+  for (var i = 0; i < panels.length; i++) panels[i].classList.remove('active');
+  document.querySelector('.tab-item[data-tab="' + name + '"]').classList.add('active');
+  document.getElementById('panel' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+}
+
+function toast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2000);
+}
+
+// ==== Cron ====
+async function loadCronJobs() {
+  var list = document.getElementById('cronList');
+  var empty = document.getElementById('cronEmpty');
+  list.innerHTML = '<div class="loading">⏳ 加载中...</div>';
+  empty.style.display = 'none';
+  try {
+    var res = await fetch('/api/cron');
+    var data = await res.json();
+    cronJobs = data.jobs || [];
+    document.getElementById('cronCount').textContent = cronJobs.length;
+    if (cronJobs.length === 0) { list.innerHTML = ''; empty.style.display = 'block'; return; }
+    var html = '';
+    for (var i = 0; i < cronJobs.length; i++) html += renderCard(cronJobs[i]);
+    list.innerHTML = html;
+    updateTime();
+  } catch(e) { list.innerHTML = '<div class="loading" style="color:#f87171">❌ 加载失败</div>'; }
+}
+
+function renderCard(job) {
+  var st = job.last_status || 'pending';
+  var en = job.enabled !== false;
+  var bC, bT;
+  if (!en) { bC = 'badge-paused'; bT = '⏸️ 暂停'; }
+  else if (st === 'ok') { bC = 'badge-ok'; bT = '正常'; }
+  else if (st === 'error') { bC = 'badge-error'; bT = '出错'; }
+  else if (st === 'running' || job.state === 'running') { bC = 'badge-running'; bT = '运行中'; }
+  else { bC = 'badge-pending'; bT = '待运行'; }
+
+  var nm = job.name || '未命名';
+  var prompt = job.prompt || '';
+  var sch = job.schedule_display || '—';
+  var last = job.last_run_at ? fmt(job.last_run_at) : '从未';
+  var next = job.next_run_at ? fmt(job.next_run_at) : '等待';
+  var del = job.deliver || '—';
+  var rpt = job.repeat ? (job.repeat.times ? job.repeat.completed+'/'+job.repeat.times : job.repeat.completed+'次') : '无限';
+  var model = job.model || '默认';
+  var err = job.last_error || job.last_delivery_error;
+  var toggleTxt = en ? '⏸️' : '▶️';
+  var toggleFn = en ? 'pauseCron' : 'resumeCron';
+
+  return '<div class="card">' +
+    '<div class="card-header"><div class="card-header-left">🤖 ' + esc(nm) + ' <span class="badge ' + bC + '">' + bT + '</span></div>' +
+    '<div class="card-header-right"><span class="btn-sm" onclick="' + toggleFn + '(\'' + job.id + '\')">' + toggleTxt + '</span>' +
+    '<span class="btn-sm" onclick="openEdit(\'' + job.id + '\')">✏️</span>' +
+    '<span class="btn-sm" onclick="delCron(\'' + job.id + '\')" style="color:#f87171;border-color:rgba(248,113,113,0.3)">🗑️</span></div></div>' +
+    '<div class="prompt-box" onclick="this.classList.toggle(\'expanded\')">' + esc(prompt) + '</div>' +
+    '<div class="info-row"><span class="info-label">调度</span><span class="info-value">' + esc(sch) + '</span></div>' +
+    '<div class="info-row"><span class="info-label">模型</span><span class="info-value">' + esc(model) + '</span></div>' +
+    '<div class="info-row"><span class="info-label">上次</span><span class="info-value">' + last + '</span></div>' +
+    '<div class="info-row"><span class="info-label">下次</span><span class="info-value">' + next + '</span></div>' +
+    '<div class="info-row"><span class="info-label">投递</span><span class="info-value">' + esc(del) + '</span></div>' +
+    '<div class="info-row"><span class="info-label">重复</span><span class="info-value">' + rpt + '</span></div>' +
+    (err ? '<div class="error-box">⚠️ ' + esc(err.substring(0,200)) + '</div>' : '') +
+    '<div class="expand-btn" onclick="viewOutput(this,\'' + job.id + '\')">▼ 输出</div>' +
+    '<div class="output-area" id="out-' + job.id + '"></div></div>';
+}
+
+async function viewOutput(btn, id) {
+  var el = document.getElementById('out-' + id);
+  if (el.classList.contains('open')) { el.classList.remove('open'); btn.textContent = '▼ 输出'; return; }
+  el.classList.add('open');
+  btn.textContent = '▲ 收起';
+  try {
+    var res = await fetch('/api/cron/' + id + '/output');
+    var data = await res.json();
+    if (data.files && data.files.length > 0) {
+      var f = data.files[0];
+      el.innerHTML = '<div class="output-meta">' + esc(f.name) + '</div><div class="output-content">' + esc(f.content.substring(0,5000)) + '</div>';
+    } else { el.innerHTML = '<div class="output-meta">暂无输出</div>'; }
+  } catch(e) { el.innerHTML = '<div class="output-meta" style="color:#f87171">加载失败</div>'; }
+}
+
+// ==== Create ====
+function openCreateCron() {
+  document.getElementById('cronName').value = '';
+  document.getElementById('cronPrompt').value = '';
+  document.getElementById('cronSchedule').value = '1d';
+  document.getElementById('cronDeliver').value = 'telegram';
+  document.getElementById('cronSkills').value = '';
+  document.getElementById('modalCreate').classList.add('open');
+}
+
+async function createCronJob() {
+  var prompt = document.getElementById('cronPrompt').value.trim();
+  if (!prompt) { toast('❌ 命令不能为空'); return; }
+  var body = {
+    name: document.getElementById('cronName').value.trim(),
+    prompt: prompt,
+    schedule_display: document.getElementById('cronSchedule').value,
+    deliver: document.getElementById('cronDeliver').value
+  };
+  var skills = document.getElementById('cronSkills').value.trim();
+  if (skills) body.skills = skills.split(',').map(function(s){return s.trim();}).filter(Boolean);
+  try {
+    var res = await fetch('/api/cron', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    if (!res.ok) { toast('❌ 创建失败'); return; }
+    document.getElementById('modalCreate').classList.remove('open');
+    toast('✅ 已创建');
+    await loadCronJobs();
+  } catch(e) { toast('❌ 网络错误'); }
+}
+
+// ==== Edit ====
+function openEdit(id) {
+  var job = cronJobs.find(function(j){return j.id===id;});
+  if (!job) return;
+  document.getElementById('editCronId').value = id;
+  document.getElementById('editCronName').value = job.name || '';
+  document.getElementById('editCronPrompt').value = job.prompt || '';
+  document.getElementById('editCronDeliver').value = job.deliver || 'telegram';
+  var sd = job.schedule_display || '';
+  var opt = '1d';
+  if (sd.indexOf('30m')>=0) opt='30m'; else if (sd.indexOf('1h')>=0) opt='1h';
+  else if (sd.indexOf('2h')>=0) opt='2h'; else if (sd.indexOf('3h')>=0) opt='3h';
+  else if (sd.indexOf('6h')>=0) opt='6h'; else if (sd.indexOf('12h')>=0) opt='12h';
+  document.getElementById('editCronSchedule').value = opt;
+  document.getElementById('modalEdit').classList.add('open');
+}
+
+async function saveEditCron() {
+  var id = document.getElementById('editCronId').value;
+  var prompt = document.getElementById('editCronPrompt').value.trim();
+  if (!prompt) { toast('❌ 命令不能为空'); return; }
+  try {
+    var res = await fetch('/api/cron/'+id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+      name: document.getElementById('editCronName').value.trim(),
+      prompt: prompt,
+      schedule_display: document.getElementById('editCronSchedule').value,
+      deliver: document.getElementById('editCronDeliver').value
+    })});
+    if (!res.ok) { toast('❌ 保存失败'); return; }
+    document.getElementById('modalEdit').classList.remove('open');
+    toast('✅ 已保存');
+    await loadCronJobs();
+  } catch(e) { toast('❌ 网络错误'); }
+}
+
+// ==== Actions ====
+async function pauseCron(id) {
+  var res = await fetch('/api/cron/'+id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({enabled:false})});
+  if (res.ok) { toast('⏸️ 已暂停'); await loadCronJobs(); }
+}
+async function resumeCron(id) {
+  var res = await fetch('/api/cron/'+id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({enabled:true})});
+  if (res.ok) { toast('▶️ 已启用'); await loadCronJobs(); }
+}
+async function delCron(id) {
+  if (!confirm('确定删除？')) return;
+  var res = await fetch('/api/cron/'+id, {method:'DELETE'});
+  if (res.ok) { toast('🗑️ 已删除'); await loadCronJobs(); }
+}
+
+// ==== Todos ====
+async function loadTodos() {
+  var list = document.getElementById('todoList');
+  var empty = document.getElementById('todoEmpty');
+  list.innerHTML = '<div class="loading">⏳ 加载中...</div>';
+  empty.style.display = 'none';
+  try {
+    var res = await fetch('/api/todos');
+    var data = await res.json();
+    todos = data.todos || [];
+    renderTodos();
+    updateTime();
+  } catch(e) { list.innerHTML = '<div class="loading" style="color:#f87171">❌ 加载失败</div>'; }
+}
+
+function renderTodos() {
+  var list = document.getElementById('todoList');
+  var empty = document.getElementById('todoEmpty');
+  var f = todos;
+  if (currentFilter === 'pending') f = todos.filter(function(t){return t.status==='pending';});
+  else if (currentFilter === 'in_progress') f = todos.filter(function(t){return t.status==='in_progress';});
+  else if (currentFilter === 'completed') f = todos.filter(function(t){return t.status==='completed';});
+  document.getElementById('todoCount').textContent = todos.length;
+  if (f.length === 0) { list.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  var h = '';
+  for (var i = 0; i < f.length; i++) h += renderTodo(f[i]);
+  list.innerHTML = h;
+}
+
+function renderTodo(t) {
+  var done = t.status === 'completed';
+  var prog = t.status === 'in_progress';
+  var cc = done ? 'done' : (prog ? 'in-progress' : '');
+  var ci = done ? '✓' : (prog ? '⟳' : '');
+  var sl = done ? '已完成' : (prog ? '进行中' : '待办');
+  var cr = t.created_at ? sf(t.created_at) : '';
+  var cat = t.category || '';
+  var ch = cat ? '<span style="background:rgba(108,99,255,0.15);padding:1px 6px;border-radius:4px;margin-right:4px">'+esc(cat)+'</span>' : '';
+  return '<div class="todo-item"><div class="todo-check '+cc+'" onclick="toggleT(\''+t.id+'\')">'+ci+'</div>' +
+    '<div class="todo-body"><div class="todo-text'+(done?' done':'')+'">'+esc(t.content)+'</div>' +
+    '<div class="todo-meta">'+ch+sl+(cr?' · '+cr:'')+'</div></div>' +
+    '<div class="todo-del" onclick="delT(\''+t.id+'\')">🗑️</div></div>';
+}
+
+async function addTodo() {
+  var v = document.getElementById('todoInput').value.trim();
+  if (!v) return;
+  document.getElementById('todoInput').value = '';
+  await fetch('/api/todos', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({content:v,status:'pending'})});
+  await loadTodos();
+}
+
+async function toggleT(id) {
+  var t = todos.find(function(x){return x.id===id;});
+  if (!t) return;
+  await fetch('/api/todos/'+id, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status: t.status==='completed' ? 'pending' : 'completed'})});
+  await loadTodos();
+}
+
+async function delT(id) {
+  await fetch('/api/todos/'+id, {method:'DELETE'});
+  await loadTodos();
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  var items = document.querySelectorAll('.filter-bar .badge');
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].dataset.filter === f) items[i].classList.remove('inactive');
+    else items[i].classList.add('inactive');
+  }
+  renderTodos();
+}
+
+// ==== Utils ====
+function esc(s) { if (!s && s !== 0) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function fmt(i) {
+  if (!i) return '—';
+  var d = new Date(i), n = new Date(), df = n - d;
+  if (df < 60000) return '刚刚';
+  if (df < 3600000) return Math.floor(df/60000)+'分钟前';
+  if (df < 86400000) return Math.floor(df/3600000)+'小时前';
+  return d.toLocaleString('zh-CN',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+function sf(i) { if (!i) return ''; return new Date(i).toLocaleString('zh-CN',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function updateTime() { document.getElementById('lastUpdate').textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN'); }
+
+document.addEventListener('DOMContentLoaded', function() {
+  loadCronJobs();
+  loadTodos();
+  if (location.hash === '#todo') switchTab('todo');
+});
+</script>
+</body>
+</html>
